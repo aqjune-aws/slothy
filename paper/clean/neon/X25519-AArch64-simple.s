@@ -1,4 +1,4 @@
-/* X25519-AArch64 by Emil Lenngren (2018)
+ /* X25519-AArch64 by Emil Lenngren (2018)
  *
  * To the extent possible under law, the person who associated CvC0 with
  * X25519-AArch64 has waived all copyright and related or neighboring rights
@@ -19,9 +19,81 @@
  * and no conditional branches or memory access pattern depend on secret data.
  */
 
-#include <hal_env.h>
-#include "instruction_wrappers.i"
+//#include <hal_env.h>
 
+#define STACK_MASK1     0
+#define STACK_MASK2     8
+#define STACK_A_0      16
+#define STACK_A_8      (STACK_A_0+ 8)
+#define STACK_A_16     (STACK_A_0+16)
+#define STACK_A_24     (STACK_A_0+24)
+#define STACK_A_32     (STACK_A_0+32)
+#define STACK_B_0      64
+#define STACK_B_8      (STACK_B_0+ 8)
+#define STACK_B_16     (STACK_B_0+16)
+#define STACK_B_24     (STACK_B_0+24)
+#define STACK_B_32     (STACK_B_0+32)
+#define STACK_CTR      104
+#define STACK_LASTBIT  108
+#define STACK_SCALAR  112
+#define STACK_X_0     168
+#define STACK_X_8     (STACK_X_0+ 8)
+#define STACK_X_16    (STACK_X_0+16)
+#define STACK_X_24    (STACK_X_0+24)
+#define STACK_X_32    (STACK_X_0+32)
+#define STACK_OUT_PTR (STACK_X_0+48)
+
+.macro stack_str loc, a
+  str \a, [sp, #\loc]  // TODO: Add memory annotation
+.endm
+
+.macro stack_str_wform loc, a
+  str W<\a>, [sp, #\loc]  // TODO: Add memory annotation
+.endm
+
+.macro stack_stp loc1, loc2, sA, sB
+  stp \sA, \sB, [sp, #\loc1\()]  // TODO: Add memory annotation
+.endm
+
+.macro stack_stp_wform loc1, loc2, sA, sB
+  stp W<\sA>, W<\sB>, [sp, #\loc1\()] // TODO: Add memory annotation
+.endm
+
+.macro stack_ldr a, loc
+  ldr \a, [sp, #\loc] // TODO: Add memory annotation
+.endm
+
+.macro stack_ldp sA, sB, loc
+  ldp \sA, \sB, [sp, #\loc\()] // TODO: Add memory annotation
+.endm
+
+.macro stack_ldrb a, loc, offset
+  ldrb \a, [sp, #\loc\()+\offset] // TODO: Add memory annotation
+.endm
+
+.macro stack_vstr_dform loc, a
+  str D<\a>, [sp, #\loc]  // TODO: Add memory annotation
+.endm
+
+.macro stack_vstp_dform loc, loc2, vA, vB
+  stp D<\vA>, D<\vB>, [sp, #\loc\()] // TODO: Add memory annotation
+.endm
+
+.macro stack_vldr_dform a, loc
+  ldr D<\a>, [sp, #\loc\()] // TODO: Add memory annotation
+.endm
+
+.macro stack_vldr_bform a, loc
+  ldr B<\a>, [sp, #\loc]
+.endm
+
+.macro stack_vld1r a, loc
+  ld1r {\a\().2d}, [sp] // TODO: Add memory annotation
+.endm
+
+.macro stack_vld2_lane out0, out1, addr, loc, lane, imm
+  ld2 { \out0\().s, \out1\().s }[\lane\()], [\addr\()], #\imm // TODO: Add memory annotation
+.endm
 
 .macro vmull out, in0, in1
   umull \out\().2d, \in0\().2s, \in1\().2s
@@ -86,7 +158,6 @@
 .macro vzip2_2s out, in0, in1
   zip2 \out\().2s, \in0\().2s, \in1\().2s
 .endm
-
 
 .macro mov_d01 out, in
   mov \out\().d[0], \in\().d[1]
@@ -396,7 +467,7 @@ sZ45 .req x6
 sZ46 .req x24
 sZ48 .req x22
 
-.macro scalar_stack_ldr sA, offset
+.macro scalar_stack_ldr sA, offset // @slothy:no-unfold
   stack_ldr \sA\()0, \offset\()_0
   stack_ldr \sA\()2, \offset\()_8
   stack_ldr \sA\()4, \offset\()_16
@@ -404,13 +475,13 @@ sZ48 .req x22
   stack_ldr \sA\()8, \offset\()_32
 .endm
 
-.macro scalar_stack_str offset, sA
+.macro scalar_stack_str offset, sA // @slothy:no-unfold
     stack_stp \offset\()_0, \offset\()_8, \sA\()0, \sA\()2
     stack_stp \offset\()_16, \offset\()_24, \sA\()4, \sA\()6
     stack_str \offset\()_32, \sA\()8
 .endm
 
-.macro vector_stack_str offset, vA
+.macro vector_stack_str offset, vA // @slothy:no-unfold
     stack_vstp_dform \offset\()_0, \offset\()_8, \vA\()0, \vA\()2
     stack_vstp_dform \offset\()_16, \offset\()_24, \vA\()4, \vA\()6
     stack_vstr_dform \offset\()_32, \vA\()8
@@ -419,7 +490,7 @@ sZ48 .req x22
     // TODO: eliminate this explicit register assignment by converting stack_vld2_lane to AArch64Instruction
     xvector_load_lane_tmp .req x26
 
-.macro vector_load_lane vA, offset, lane
+.macro vector_load_lane vA, offset, lane // @slothy:no-unfold
     add xvector_load_lane_tmp, sp, #\offset\()_0
     stack_vld2_lane \vA\()0, \vA\()1, xvector_load_lane_tmp, \offset\()_0,  \lane, 8
     stack_vld2_lane \vA\()2, \vA\()3, xvector_load_lane_tmp, \offset\()_8,  \lane, 8
@@ -428,7 +499,7 @@ sZ48 .req x22
     stack_vld2_lane \vA\()8, \vA\()9, xvector_load_lane_tmp, \offset\()_32, \lane, 8
 .endm
 
-.macro vector_sub_inner vC0, vC2, vC4, vC6, vC8, \
+.macro vector_sub_inner vC0, vC2, vC4, vC6, vC8, \ // @slothy:no-unfold
                         vA0, vA2, vA4, vA6, vA8, \
                         vB0, vB2, vB4, vB6, vB8
     // (2^255-19)*4 - vB
@@ -439,14 +510,14 @@ sZ48 .req x22
     vsub_2s    \vC8, v29, \vB8
 
     // ... + vA
-    vadd_2s    \vC0, \vA0, \vC0
-    vadd_2s    \vC2, \vA2, \vC2
-    vadd_2s    \vC4, \vA4, \vC4
-    vadd_2s    \vC6, \vA6, \vC6
-    vadd_2s    \vC8, \vA8, \vC8
+    vadd_2s    \vC0, \vA0, \vC0         // ubignum_of_qreglist 0
+    vadd_2s    \vC2, \vA2, \vC2         // ubignum_of_qreglist 1
+    vadd_2s    \vC4, \vA4, \vC4         // ubignum_of_qreglist 2
+    vadd_2s    \vC6, \vA6, \vC6         // ubignum_of_qreglist 3
+    vadd_2s    \vC8, \vA8, \vC8         // ubignum_of_qreglist 4
 .endm
 
-.macro vector_sub vC, vA, vB
+.macro vector_sub vC, vA, vB // @slothy:no-unfold
     vector_sub_inner \vC\()0, \vC\()2, \vC\()4, \vC\()6, \vC\()8, \
                      \vA\()0, \vA\()2, \vA\()4, \vA\()6, \vA\()8, \
                      \vB\()0, \vB\()2, \vB\()4, \vB\()6, \vB\()8
@@ -455,15 +526,15 @@ sZ48 .req x22
 
 .macro vector_add_inner vC0, vC2, vC4, vC6, vC8, \
                         vA0, vA2, vA4, vA6, vA8, \
-                        vB0, vB2, vB4, vB6, vB8
-    vadd_2s    \vC0, \vA0, \vB0
-    vadd_2s    \vC2, \vA2, \vB2
-    vadd_2s    \vC4, \vA4, \vB4
-    vadd_2s    \vC6, \vA6, \vB6
-    vadd_2s    \vC8, \vA8, \vB8
+                        vB0, vB2, vB4, vB6, vB8  // @slothy:no-unfold
+    vadd_2s    \vC0, \vA0, \vB0         // ubignum_of_qreglist 0
+    vadd_2s    \vC2, \vA2, \vB2         // ubignum_of_qreglist 1
+    vadd_2s    \vC4, \vA4, \vB4         // ubignum_of_qreglist 2
+    vadd_2s    \vC6, \vA6, \vB6         // ubignum_of_qreglist 3
+    vadd_2s    \vC8, \vA8, \vB8         // ubignum_of_qreglist 4
 .endm
 
-.macro vector_add vC, vA, vB
+.macro vector_add vC, vA, vB // @slothy:no-unfold
     vector_add_inner \vC\()0, \vC\()2, \vC\()4, \vC\()6, \vC\()8, \
                      \vA\()0, \vA\()2, \vA\()4, \vA\()6, \vA\()8, \
                      \vB\()0, \vB\()2, \vB\()4, \vB\()6, \vB\()8
@@ -471,15 +542,15 @@ sZ48 .req x22
 
 .macro vector_cmov_inner vA0, vA2, vA4, vA6, vA8, \
                          vB0, vB2, vB4, vB6, vB8, \
-                         vC0, vC2, vC4, vC6, vC8
-    fcsel_dform    \vA0, \vB0, \vC0, eq
-    fcsel_dform    \vA2, \vB2, \vC2, eq
-    fcsel_dform    \vA4, \vB4, \vC4, eq
-    fcsel_dform    \vA6, \vB6, \vC6, eq
-    fcsel_dform    \vA8, \vB8, \vC8, eq
+                         vC0, vC2, vC4, vC6, vC8  // @slothy:no-unfold
+    fcsel_dform    \vA0, \vB0, \vC0, eq         // ubignum_of_qreglist 0
+    fcsel_dform    \vA2, \vB2, \vC2, eq         // ubignum_of_qreglist 1
+    fcsel_dform    \vA4, \vB4, \vC4, eq         // ubignum_of_qreglist 2
+    fcsel_dform    \vA6, \vB6, \vC6, eq         // ubignum_of_qreglist 3
+    fcsel_dform    \vA8, \vB8, \vC8, eq         // ubignum_of_qreglist 4
 .endm
 
-.macro vector_cmov vA, vB, vC
+.macro vector_cmov vA, vB, vC// @slothy:no-unfold
     vector_cmov_inner \vA\()0, \vA\()2, \vA\()4, \vA\()6, \vA\()8, \
                       \vB\()0, \vB\()2, \vB\()4, \vB\()6, \vB\()8, \
                       \vC\()0, \vC\()2, \vC\()4, \vC\()6, \vC\()8,
@@ -487,7 +558,7 @@ sZ48 .req x22
 
 .macro vector_transpose_inner vA0, vA1, vA2, vA3, vA4, vA5, vA6, vA7, vA8, vA9, \
                               vB0, vB2, vB4, vB6, vB8, \
-                              vC0, vC2, vC4, vC6, vC8
+                              vC0, vC2, vC4, vC6, vC8 // @slothy:no-unfold
     trn2_2s    \vA1, \vB0, \vC0
     trn1_2s    \vA0, \vB0, \vC0
     trn2_2s    \vA3, \vB2, \vC2
@@ -500,14 +571,14 @@ sZ48 .req x22
     trn1_2s    \vA8, \vB8, \vC8
 .endm
 
-.macro vector_transpose vA, vB, vC
+.macro vector_transpose vA, vB, vC // @slothy:no-unfold
     vector_transpose_inner \vA\()0, \vA\()1, \vA\()2, \vA\()3, \vA\()4, \vA\()5, \vA\()6, \vA\()7, \vA\()8, \vA\()9, \
                            \vB\()0, \vB\()2, \vB\()4, \vB\()6, \vB\()8, \
                            \vC\()0, \vC\()2, \vC\()4, \vC\()6, \vC\()8,
 .endm
 
 .macro vector_to_scalar_inner sA0, sA2, sA4, sA6, sA8, \
-                              vB0, vB2, vB4, vB6, vB8
+                              vB0, vB2, vB4, vB6, vB8 // @slothy:no-unfold
     mov    \sA0, \vB0\().d[0]
     mov    \sA2, \vB2\().d[0]
     mov    \sA4, \vB4\().d[0]
@@ -515,13 +586,13 @@ sZ48 .req x22
     mov    \sA8, \vB8\().d[0]
 .endm
 
-.macro vector_to_scalar sA, vB
+.macro vector_to_scalar sA, vB // @slothy:no-unfold
     vector_to_scalar_inner \sA\()0, \sA\()2, \sA\()4, \sA\()6, \sA\()8, \
                            \vB\()0, \vB\()2, \vB\()4, \vB\()6, \vB\()8
 .endm
 
 .macro scalar_to_vector_inner vA0, vA2, vA4, vA6, vA8, \
-                              sB0, sB2, sB4, sB6, sB8
+                              sB0, sB2, sB4, sB6, sB8 // @slothy:no-unfold
     mov    \vA0\().d[0], \sB0
     mov    \vA2\().d[0], \sB2
     mov    \vA4\().d[0], \sB4
@@ -529,14 +600,14 @@ sZ48 .req x22
     mov    \vA8\().d[0], \sB8
 .endm
 
-.macro scalar_to_vector vA, sB
+.macro scalar_to_vector vA, sB // @slothy:no-unfold
     scalar_to_vector_inner \vA\()0, \vA\()2, \vA\()4, \vA\()6, \vA\()8, \
                            \sB\()0, \sB\()2, \sB\()4, \sB\()6, \sB\()8
 .endm
 
 
 .macro vector_extract_upper_inner vA0, vA2, vA4, vA6, vA8, \
-                                  vB0, vB2, vB4, vB6, vB8
+                                  vB0, vB2, vB4, vB6, vB8 // @slothy:no-unfold
     mov_d01 \vA0, \vB0
     mov_d01 \vA2, \vB2
     mov_d01 \vA4, \vB4
@@ -544,13 +615,13 @@ sZ48 .req x22
     mov_d01 \vA8, \vB8
 .endm
 
-.macro vector_extract_upper vA, vB
+.macro vector_extract_upper vA, vB // @slothy:no-unfold
     vector_extract_upper_inner \vA\()0, \vA\()2, \vA\()4, \vA\()6, \vA\()8, \
                                \vB\()0, \vB\()2, \vB\()4, \vB\()6, \vB\()8
 .endm
 
 .macro vector_compress_inner vA0, vA2, vA4, vA6, vA8, \
-                             vB0, vB1, vB2, vB3, vB4, vB5, vB6, vB7, vB8, vB9
+                             vB0, vB1, vB2, vB3, vB4, vB5, vB6, vB7, vB8, vB9 // @slothy:no-unfold
     trn1_s   \vA0, \vB0, \vB1
     trn1_s   \vA2, \vB2, \vB3
     trn1_s   \vA4, \vB4, \vB5
@@ -558,36 +629,36 @@ sZ48 .req x22
     trn1_s   \vA8, \vB8, \vB9
 .endm
 
-.macro vector_compress vA, vB
+.macro vector_compress vA, vB // @slothy:no-unfold
     vector_compress_inner \vA\()0, \vA\()2, \vA\()4, \vA\()6, \vA\()8, \
                           \vB\()0, \vB\()1, \vB\()2, \vB\()3, \vB\()4, \vB\()5, \vB\()6, \vB\()7, \vB\()8, \vB\()9,
 .endm
 
-.macro scalar_clear_carries_inner sA0, sA1, sA2, sA3, sA4, sA5, sA6, sA7, sA8, sA9
-    and    \sA1, \sA1, #0x1ffffff
-    and    \sA3, \sA3, #0x1ffffff
-    and    \sA5, \sA5, #0x1ffffff
-    and    \sA7, \sA7, #0x1ffffff
-    mov    W<\sA0>, W<\sA0>
-    mov    W<\sA2>, W<\sA2>
-    mov    W<\sA4>, W<\sA4>
-    mov    W<\sA6>, W<\sA6>
-    mov    W<\sA8>, W<\sA8>
+.macro scalar_clear_carries_inner sA0, sA1, sA2, sA3, sA4, sA5, sA6, sA7, sA8, sA9 // @slothy:no-unfold
+    and    \sA1, \sA1, #0x1ffffff       // ubignum_of_xreglist 1
+    and    \sA3, \sA3, #0x1ffffff       // ubignum_of_xreglist 3
+    and    \sA5, \sA5, #0x1ffffff       // ubignum_of_xreglist 5
+    and    \sA7, \sA7, #0x1ffffff       // ubignum_of_xreglist 7
+    mov    W<\sA0>, W<\sA0>             // ubignum_of_xreglist 0
+    mov    W<\sA2>, W<\sA2>             // ubignum_of_xreglist 2
+    mov    W<\sA4>, W<\sA4>             // ubignum_of_xreglist 4
+    mov    W<\sA6>, W<\sA6>             // ubignum_of_xreglist 6
+    mov    W<\sA8>, W<\sA8>             // ubignum_of_xreglist 8 // *** ubignum_of_xreglist 9 *** from src
 .endm
 
-.macro scalar_clear_carries sA
+.macro scalar_clear_carries sA // @slothy:no-unfold
     scalar_clear_carries_inner \sA\()0, \sA\()1, \sA\()2, \sA\()3, \sA\()4, \sA\()5, \sA\()6, \sA\()7, \sA\()8, \sA\()9
 .endm
 
-.macro scalar_decompress_inner sA0, sA1, sA2, sA3, sA4, sA5, sA6, sA7, sA8, sA9
-    lsr    \sA1, \sA0, #32
-    lsr    \sA3, \sA2, #32
-    lsr    \sA5, \sA4, #32
-    lsr    \sA7, \sA6, #32
-    lsr    \sA9, \sA8, #32
+.macro scalar_decompress_inner sA0, sA1, sA2, sA3, sA4, sA5, sA6, sA7, sA8, sA9 // @slothy:no-unfold
+    lsr    \sA1, \sA0, #32              // ubignum_of_wreglist 1 + ubignum_of_wreglist 0
+    lsr    \sA3, \sA2, #32              // ubignum_of_wreglist 3 + ubignum_of_wreglist 2
+    lsr    \sA5, \sA4, #32              // ubignum_of_wreglist 5 + ubignum_of_wreglist 4
+    lsr    \sA7, \sA6, #32              // ubignum_of_wreglist 7 + ubignum_of_wreglist 6
+    lsr    \sA9, \sA8, #32              // ubignum_of_wreglist 9 + ubignum_of_wreglist 8
 .endm
 
-.macro scalar_decompress sA
+.macro scalar_decompress sA // @slothy:no-unfold
     scalar_decompress_inner \sA\()0, \sA\()1, \sA\()2, \sA\()3, \sA\()4, \sA\()5, \sA\()6, \sA\()7, \sA\()8, \sA\()9
 .endm
 
@@ -619,14 +690,14 @@ sZ48 .req x22
     vrepack_inner_tmp2 .req v0
 
 .macro vector_addsub_repack_inner vA0, vA1, vA2, vA3, vA4, vA5, vA6, vA7, vA8, vA9, \
-                    vC0, vC1, vC2, vC3, vC4, vC5, vC6, vC7, vC8, vC9
+                    vC0, vC1, vC2, vC3, vC4, vC5, vC6, vC7, vC8, vC9 // @slothy:no-unfold
     vuzp1    vR_l4h4l5h5, \vC4, \vC5
     vuzp1    vR_l6h6l7h7, \vC6, \vC7
-    stack_vld1r vrepack_inner_tmp, STACK_MASK1
+    stack_vld1r vrepack_inner_tmp, STACK_MASK1          // CHANGEME 626
     vuzp1    vR_l4567, vR_l4h4l5h5, vR_l6h6l7h7
     vuzp2    vR_h4567, vR_l4h4l5h5, vR_l6h6l7h7
     trn1_s   vR_l89h89, \vC8, \vC9
-    stack_vldr_bform vrepack_inner_tmp2, STACK_MASK2    // ldr      b0, [sp, #8]
+    stack_vldr_bform vrepack_inner_tmp2, STACK_MASK2    // CHANGEME 629
     vuzp1    vR_l0h0l1h1, \vC0, \vC1
     vuzp1    vR_l2h2l3h3, \vC2, \vC3
     mov_d01  vR_h89xx, vR_l89h89
@@ -642,19 +713,19 @@ sZ48 .req x22
     vsub_4s  vDiff4567, vDiff4567, vR_h4567
     vsub_4s  vDiff0123, vDiff0123, vR_h0123
     vsub_2s  vDiff89xx, vDiff89xx, vR_h89xx
-    vzip1_4s \vA0, vDiff0123, vSum0123
-    vzip2_4s \vA2, vDiff0123, vSum0123
-    vzip1_4s \vA4, vDiff4567, vSum4567
-    vzip2_4s \vA6, vDiff4567, vSum4567
-    vzip1_2s \vA8, vDiff89xx, vSum89xx
-    vzip2_2s \vA9, vDiff89xx, vSum89xx
-    mov_d01  \vA1, \vA0
-    mov_d01  \vA3, \vA2
-    mov_d01  \vA5, \vA4
-    mov_d01  \vA7, \vA6
+    vzip1_4s \vA0, vDiff0123, vSum0123          // ubignum_of_h32reglist 0 + ubignum_of_l32reglist 0
+    vzip2_4s \vA2, vDiff0123, vSum0123          // ubignum_of_h32reglist 2 + ubignum_of_l32reglist 2
+    vzip1_4s \vA4, vDiff4567, vSum4567          // ubignum_of_h32reglist 4 + ubignum_of_l32reglist 4
+    vzip2_4s \vA6, vDiff4567, vSum4567          // ubignum_of_h32reglist 6 + ubignum_of_l32reglist 6
+    vzip1_2s \vA8, vDiff89xx, vSum89xx          // ubignum_of_h32reglist 8 + ubignum_of_l32reglist 8
+    vzip2_2s \vA9, vDiff89xx, vSum89xx          // ubignum_of_h32reglist 9 + ubignum_of_l32reglist 9
+    mov_d01  \vA1, \vA0                         // ubignum_of_h32reglist 1 + ubignum_of_l32reglist 1
+    mov_d01  \vA3, \vA2                         // ubignum_of_h32reglist 3 + ubignum_of_l32reglist 3
+    mov_d01  \vA5, \vA4                         // ubignum_of_h32reglist 5 + ubignum_of_l32reglist 5
+    mov_d01  \vA7, \vA6                         // ubignum_of_h32reglist 7 + ubignum_of_l32reglist 7
 .endm
 
-.macro vector_addsub_repack vA, vC
+.macro vector_addsub_repack vA, vC // @slothy:no-unfold
 vector_addsub_repack_inner \
         \vA\()0, \vA\()1, \vA\()2, \vA\()3, \vA\()4, \vA\()5, \vA\()6, \vA\()7, \vA\()8, \vA\()9, \
         \vC\()0, \vC\()1, \vC\()2, \vC\()3, \vC\()4, \vC\()5, \vC\()6, \vC\()7, \vC\()8, \vC\()9
@@ -665,7 +736,7 @@ vector_addsub_repack_inner \
 // TODO: simplify (this is still the same instruction order as before; we can make it simpler and leave the re-ordering to Sloty)
 .macro scalar_sqr_inner \
         sAA0,     sAA1,     sAA2,     sAA3,     sAA4,     sAA5,     sAA6,     sAA7,     sAA8,     sAA9,      \
-        sA0,      sA1,      sA2,      sA3,      sA4,      sA5,      sA6,      sA7,      sA8,      sA9
+        sA0,      sA1,      sA2,      sA3,      sA4,      sA5,      sA6,      sA7,      sA8,      sA9 // @slothy:no-unfold
   lsr    \sA1, \sA0, #32
   lsr    \sA3, \sA2, #32
   lsr    \sA5, \sA4, #32
@@ -754,25 +825,25 @@ vector_addsub_repack_inner \
   add    \sAA1, X<tmp_scalar_sqr_1>, X<tmp_scalar_sqr_0>, lsr #26
   and    \sAA0, X<tmp_scalar_sqr_0>, #0x3ffffff
   add    \sAA2, X<tmp_scalar_sqr_2>, \sAA1, lsr #25
-  bfi    \sAA0, \sAA1, #32, #25
+  bfi    \sAA0, \sAA1, #32, #25                         // ubignum_of_preglist 0
   add    \sAA3, X<tmp_scalar_sqr_3>, \sAA2, lsr #26
   and    \sAA2, \sAA2, #0x3ffffff
   add    \sAA4, X<tmp_scalar_sqr_4>, \sAA3, lsr #25
-  bfi    \sAA2, \sAA3, #32, #25
+  bfi    \sAA2, \sAA3, #32, #25                         // ubignum_of_preglist 1
   add    \sAA5, X<tmp_scalar_sqr_5>, \sAA4, lsr #26
   and    \sAA4, \sAA4, #0x3ffffff
   add    \sAA6, X<tmp_scalar_sqr_6>, \sAA5, lsr #25
-  bfi    \sAA4, \sAA5, #32, #25
+  bfi    \sAA4, \sAA5, #32, #25                         // ubignum_of_preglist 2
   add    \sAA7, X<tmp_scalar_sqr_7>, \sAA6, lsr #26
   and    \sAA6, \sAA6, #0x3ffffff
   add    \sAA8, X<tmp_scalar_sqr_8>, \sAA7, lsr #25
-  bfi    \sAA6, \sAA7, #32, #25
+  bfi    \sAA6, \sAA7, #32, #25                         // ubignum_of_preglist 3
   add    \sAA9, X<tmp_scalar_sqr_9>, \sAA8, lsr #26
   and    \sAA8, \sAA8, #0x3ffffff
-  bfi    \sAA8, \sAA9, #32, #26
+  bfi    \sAA8, \sAA9, #32, #26                         // ubignum_of_preglist 4
 .endm
 
-.macro scalar_sqr sAA, sA
+.macro scalar_sqr sAA, sA // @slothy:no-unfold
 scalar_sqr_inner \
         \sAA\()0,  \sAA\()1,  \sAA\()2,  \sAA\()3,  \sAA\()4,  \sAA\()5,  \sAA\()6,  \sAA\()7,  \sAA\()8,  \sAA\()9,  \
         \sA\()0,   \sA\()1,   \sA\()2,   \sA\()3,   \sA\()4,   \sA\()5,   \sA\()6,   \sA\()7,   \sA\()8,   \sA\()9
@@ -784,7 +855,7 @@ scalar_sqr_inner \
 .macro scalar_mul_inner \
         sC0,     sC1,     sC2,     sC3,     sC4,     sC5,     sC6,     sC7,     sC8,     sC9,     \
         sA0,     sA1,     sA2,     sA3,     sA4,     sA5,     sA6,     sA7,     sA8,     sA9,     \
-        sB0,     sB1,     sB2,     sB3,     sB4,     sB5,     sB6,     sB7,     sB8,     sB9
+        sB0,     sB1,     sB2,     sB3,     sB4,     sB5,     sB6,     sB7,     sB8,     sB9 // @slothy:no-unfold
 
 
   mul    W<tmp_scalar_mul_tw_1>, W<\sA1>,                W<const19>
@@ -885,12 +956,12 @@ scalar_sqr_inner \
   add    X<tmp_scalar_mul_7>, X<tmp_scalar_mul_7>, X<tmp_scalar_mul_6>, lsr #26
   and    \sC6, X<tmp_scalar_mul_6>, #0x3ffffff
   add    X<tmp_scalar_mul_8>, X<tmp_scalar_mul_8>, X<tmp_scalar_mul_7>, lsr #25
-  bfi    \sC6, X<tmp_scalar_mul_7>, #32, #25
+  bfi    \sC6, X<tmp_scalar_mul_7>, #32, #25            // ubignum_of_preglist 3
   add    X<tmp_scalar_mul_9>, X<tmp_scalar_mul_9>, X<tmp_scalar_mul_8>, lsr #26
   and    \sC8, X<tmp_scalar_mul_8>, #0x3ffffff
   bic    X<tmp_scalar_mul_0b>, X<tmp_scalar_mul_9>, #0x3ffffff
   lsr    X<tmp_scalar_mul_0>, X<tmp_scalar_mul_0b>, #26
-  bfi    \sC8, X<tmp_scalar_mul_9>, #32, #26
+  bfi    \sC8, X<tmp_scalar_mul_9>, #32, #26            // ubignum_of_preglist 4
   add    X<tmp_scalar_mul_0>, X<tmp_scalar_mul_0>, X<tmp_scalar_mul_0b>, lsr #25
   add    X<tmp_scalar_mul_0>, X<tmp_scalar_mul_0>, X<tmp_scalar_mul_0b>, lsr #22
 
@@ -932,17 +1003,17 @@ scalar_sqr_inner \
   add    \sC1, X<tmp_scalar_mul_1>, X<tmp_scalar_mul_0>, lsr #26
   and    \sC0, X<tmp_scalar_mul_0>, #0x3ffffff
   add    \sC2, X<tmp_scalar_mul_2>, \sC1, lsr #25
-  bfi    \sC0, \sC1, #32, #25
+  bfi    \sC0, \sC1, #32, #25                           // ubignum_of_preglist 0
   add    X<tmp_scalar_mul_3>, X<tmp_scalar_mul_3>, \sC2, lsr #26
   and    \sC2, \sC2, #0x3ffffff
   add    \sC4, \sC4, X<tmp_scalar_mul_3>, lsr #25
-  bfi    \sC2, X<tmp_scalar_mul_3>, #32, #25
+  bfi    \sC2, X<tmp_scalar_mul_3>, #32, #25            // ubignum_of_preglist 1
   add    \sC5, \sC5, \sC4, lsr #26
   and    \sC4, \sC4, #0x3ffffff
-  bfi    \sC4, \sC5, #32, #26
+  bfi    \sC4, \sC5, #32, #26                           // ubignum_of_preglist 2
 .endm
 
-.macro scalar_mul sC, sA, sB
+.macro scalar_mul sC, sA, sB // @slothy:no-unfold
 scalar_mul_inner \
         \sC\()0,  \sC\()1,  \sC\()2,  \sC\()3,  \sC\()4,  \sC\()5,  \sC\()6,  \sC\()7,  \sC\()8,  \sC\()9,  \
         \sA\()0,  \sA\()1,  \sA\()2,  \sA\()3,  \sA\()4,  \sA\()5,  \sA\()6,  \sA\()7,  \sA\()8,  \sA\()9,  \
@@ -950,16 +1021,16 @@ scalar_mul_inner \
 .endm
 
 xtmp_scalar_sub_0 .req x21
-  
+
 // sC0 .. sC4   output C = A +  4p - B  (registers may be the same as A)
 // sA0 .. sA4   first operand A
 // sB0 .. sB4   second operand B
 .macro scalar_sub_inner \
         sC0, sC1, sC2, sC3, sC4, \
         sA0, sA1, sA2, sA3, sA4, \
-        sB0, sB1, sB2, sB3, sB4
+        sB0, sB1, sB2, sB3, sB4 // @slothy:no-unfold
 
-  ldr    xtmp_scalar_sub_0, #=0x07fffffe07fffffc
+  ldr    xtmp_scalar_sub_0, #=0x07fffffe07fffffc        // CHANGEME 962
   add    \sC1, \sA1, xtmp_scalar_sub_0
   add    \sC2, \sA2, xtmp_scalar_sub_0
   add    \sC3, \sA3, xtmp_scalar_sub_0
@@ -973,7 +1044,7 @@ xtmp_scalar_sub_0 .req x21
   sub    \sC4, \sC4, \sB4
 .endm
 
-.macro scalar_sub sC, sA, sB
+.macro scalar_sub sC, sA, sB // @slothy:no-unfold
 scalar_sub_inner \sC\()0, \sC\()2, \sC\()4, \sC\()6, \sC\()8, \
                  \sA\()0, \sA\()2, \sA\()4, \sA\()6, \sA\()8, \
                  \sB\()0, \sB\()2, \sB\()4, \sB\()6, \sB\()8
@@ -984,10 +1055,10 @@ scalar_sub_inner \sC\()0, \sC\()2, \sC\()4, \sC\()6, \sC\()8, \
         sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7, sC8, sC9, \
         sA0, sA1, sA2, sA3, sA4, sA5, sA6, sA7, sA8, sA9, \
         sB0, sB1, sB2, sB3, sB4, sB5, sB6, sB7, sB8, sB9, \
-        multconst
+        multconst // @slothy:no-unfold
 
-  ldr    X<tmp_scalar_addm_0>, #=\multconst
-  umaddl \sC9, W<\sB9>, W<tmp_scalar_addm_0>, \sA9
+  ldr    X<tmp_scalar_addm_0>, #=\multconst             // CHANGEME 989
+  umaddl \sC9, W<\sB9>, W<tmp_scalar_addm_0>, \sA9      // *** DONK: last argument is bbalt 9!!!! ****
   umaddl \sC0, W<\sB0>, W<tmp_scalar_addm_0>, \sA0
   umaddl \sC1, W<\sB1>, W<tmp_scalar_addm_0>, \sA1
   umaddl \sC2, W<\sB2>, W<tmp_scalar_addm_0>, \sA2
@@ -1004,26 +1075,26 @@ scalar_sub_inner \sC\()0, \sC\()2, \sC\()4, \sC\()6, \sC\()8, \
   umaddl \sC8, W<\sB8>, W<tmp_scalar_addm_0>, \sA8
 
   add    \sC1, \sC1, \sC0, lsr #26
-  and    \sC0, \sC0, #0x3ffffff
+  and    \sC0, \sC0, #0x3ffffff         // ubignum_of_xreglist 0
   add    \sC2, \sC2, \sC1, lsr #25
-  and    \sC1, \sC1, #0x1ffffff
+  and    \sC1, \sC1, #0x1ffffff         // ubignum_of_xreglist 1
   add    \sC3, \sC3, \sC2, lsr #26
-  and    \sC2, \sC2, #0x3ffffff
+  and    \sC2, \sC2, #0x3ffffff         // ubignum_of_xreglist 2
   add    \sC4, \sC4, \sC3, lsr #25
-  and    \sC3, \sC3, #0x1ffffff
+  and    \sC3, \sC3, #0x1ffffff         // ubignum_of_xreglist 3
   add    \sC5, \sC5, \sC4, lsr #26
-  and    \sC4, \sC4, #0x3ffffff
+  and    \sC4, \sC4, #0x3ffffff         // ubignum_of_xreglist 4
   add    \sC6, \sC6, \sC5, lsr #25
-  and    \sC5, \sC5, #0x1ffffff
+  and    \sC5, \sC5, #0x1ffffff         // ubignum_of_xreglist 5
   add    \sC7, \sC7, \sC6, lsr #26
-  and    \sC6, \sC6, #0x3ffffff
+  and    \sC6, \sC6, #0x3ffffff         // ubignum_of_xreglist 6
   add    \sC8, \sC8, \sC7, lsr #25
-  and    \sC7, \sC7, #0x1ffffff
-  add    \sC9, \sC9, \sC8, lsr #26
-  and    \sC8, \sC8, #0x3ffffff
+  and    \sC7, \sC7, #0x1ffffff         // ubignum_of_xreglist 7
+  add    \sC9, \sC9, \sC8, lsr #26      // ubignum_of_xreglist 9
+  and    \sC8, \sC8, #0x3ffffff         // ubignum_of_xreglist 9
 .endm
 
-.macro scalar_addm sC, sA, sB, multconst
+.macro scalar_addm sC, sA, sB, multconst // @slothy:no-unfold
 scalar_addm_inner \sC\()0, \sC\()1, \sC\()2, \sC\()3, \sC\()4, \sC\()5, \sC\()6, \sC\()7, \sC\()8, \sC\()9,  \
                   \sA\()0, \sA\()1, \sA\()2, \sA\()3, \sA\()4, \sA\()5, \sA\()6, \sA\()7, \sA\()8, \sA\()9,  \
                   \sB\()0, \sB\()1, \sB\()2, \sB\()3, \sB\()4, \sB\()5, \sB\()6, \sB\()7, \sB\()8, \sB\()9, \
@@ -1034,7 +1105,7 @@ scalar_addm_inner \sC\()0, \sC\()1, \sC\()2, \sC\()3, \sC\()4, \sC\()5, \sC\()6,
 // vA0      .. vA9         input A
 .macro vector_sqr_inner \
         vAA0,     vAA1,     vAA2,     vAA3,     vAA4,     vAA5,     vAA6,     vAA7,     vAA8,     vAA9,     \
-        vA0,      vA1,      vA2,      vA3,      vA4,      vA5,      vA6,      vA7,      vA8,      vA9
+        vA0,      vA1,      vA2,      vA3,      vA4,      vA5,      vA6,      vA7,      vA8,      vA9 // @slothy:no-unfold
   vshl_s   V<tmp_vector_sqr_dbl_9>,  \vA9,  #1
   vshl_s   V<tmp_vector_sqr_dbl_8>,  \vA8,  #1
   vshl_s   V<tmp_vector_sqr_dbl_7>,  \vA7,  #1
@@ -1123,19 +1194,19 @@ scalar_addm_inner \sC\()0, \sC\()1, \sC\()2, \sC\()3, \sC\()4, \sC\()5, \sC\()6,
   vusra    V<tmp_vector_sqr_6>,  V<tmp_vector_sqr_5>, #25
   vusra    V<tmp_vector_sqr_7>,  V<tmp_vector_sqr_6>, #26
   vusra    V<tmp_vector_sqr_8>,  V<tmp_vector_sqr_7>, #25
-  vusra    \vAA9,  V<tmp_vector_sqr_8>, #26
-  vand     \vAA4,  V<tmp_vector_sqr_4>, vMaskA
-  vand     \vAA5,  V<tmp_vector_sqr_5>, vMaskB
-  vand     \vAA0,  V<tmp_vector_sqr_0>, vMaskA
-  vand     \vAA6,  V<tmp_vector_sqr_6>, vMaskA
-  vand     \vAA1,  V<tmp_vector_sqr_1>, vMaskB
-  vand     \vAA7,  V<tmp_vector_sqr_7>, vMaskB
-  vand     \vAA2,  V<tmp_vector_sqr_2>, vMaskA
-  vand     \vAA8,  V<tmp_vector_sqr_8>, vMaskA
-  vand     \vAA3,  V<tmp_vector_sqr_3>, vMaskB
+  vusra    \vAA9,  V<tmp_vector_sqr_8>, #26             // ubignum_of_hreglist 9 + ubignum_of_lreglist 9
+  vand     \vAA4,  V<tmp_vector_sqr_4>, vMaskA          // ubignum_of_hreglist 4 + ubignum_of_lreglist 4
+  vand     \vAA5,  V<tmp_vector_sqr_5>, vMaskB          // ubignum_of_hreglist 5 + ubignum_of_lreglist 5
+  vand     \vAA0,  V<tmp_vector_sqr_0>, vMaskA          // ubignum_of_hreglist 0 + ubignum_of_lreglist 0
+  vand     \vAA6,  V<tmp_vector_sqr_6>, vMaskA          // ubignum_of_hreglist 6 + ubignum_of_lreglist 6
+  vand     \vAA1,  V<tmp_vector_sqr_1>, vMaskB          // ubignum_of_hreglist 1 + ubignum_of_lreglist 1
+  vand     \vAA7,  V<tmp_vector_sqr_7>, vMaskB          // ubignum_of_hreglist 7 + ubignum_of_lreglist 7
+  vand     \vAA2,  V<tmp_vector_sqr_2>, vMaskA          // ubignum_of_hreglist 2 + ubignum_of_lreglist 2
+  vand     \vAA8,  V<tmp_vector_sqr_8>, vMaskA          // ubignum_of_hreglist 8 + ubignum_of_lreglist 8
+  vand     \vAA3,  V<tmp_vector_sqr_3>, vMaskB          // ubignum_of_hreglist 3 + ubignum_of_lreglist 3
 .endm
 
-.macro vector_sqr vAA, vA
+.macro vector_sqr vAA, vA // @slothy:no-unfold
 vector_sqr_inner \
         \vAA\()0,  \vAA\()1,  \vAA\()2,  \vAA\()3,  \vAA\()4,  \vAA\()5,  \vAA\()6,  \vAA\()7,  \vAA\()8,  \vAA\()9,  \
         \vA\()0,   \vA\()1,   \vA\()2,   \vA\()3,   \vA\()4,   \vA\()5,   \vA\()6,   \vA\()7,   \vA\()8,   \vA\()9
@@ -1147,7 +1218,7 @@ vector_sqr_inner \
 .macro vector_mul_inner \
         vC0, vC1, vC2, vC3, vC4, vC5, vC6, vC7, vC8, vC9, \
         vA0, vA1, vA2, vA3, vA4, vA5, vA6, vA7, vA8, vA9, \
-        vB0, vB1, vB2, vB3, vB4, vB5, vB6, vB7, vB8, vB9
+        vB0, vB1, vB2, vB3, vB4, vB5, vB6, vB7, vB8, vB9 // @slothy:no-unfold
   vmull    \vC9, \vA0, \vB9
   vmlal    \vC9, \vA2, \vB7
   vmlal    \vC9, \vA4, \vB5
@@ -1257,69 +1328,45 @@ vector_sqr_inner \
   vand     \vC3, \vC3, vMaskB
   vmlal    \vC0, \vA7, \vB3
   vusra    \vC5, \vC4, #26
-  vand     \vC4, \vC4, vMaskA
+  vand     \vC4, \vC4, vMaskA           // ubignum_of_hreglist 4 + ubignum_of_lreglist 4
   vmlal    \vC1, \vA3, \vB8
   vusra    \vC6, \vC5, #25
-  vand     \vC5, \vC5, vMaskB
+  vand     \vC5, \vC5, vMaskB           // ubignum_of_hreglist 5 + ubignum_of_lreglist 5
   vmlal    \vC0, \vA9, \vB1
   vusra    \vC7, \vC6, #26
-  vand     \vC6, \vC6, vMaskA
+  vand     \vC6, \vC6, vMaskA           // ubignum_of_hreglist 6 + ubignum_of_lreglist 6
   vmlal    \vC1, \vA5, \vB6
   vmlal    \vC1, \vA7, \vB4
   vmlal    \vC1, \vA9, \vB2
   vusra    \vC8, \vC7, #25
-  vand     \vC7, \vC7, vMaskB
+  vand     \vC7, \vC7, vMaskB           // ubignum_of_hreglist 7 + ubignum_of_lreglist 7
   vshl_d   \vC0, \vC0, #1
   vusra    \vC9, \vC8, #26
-  vand     \vC8, \vC8, vMaskA
+  vand     \vC8, \vC8, vMaskA           // ubignum_of_hreglist 8 + ubignum_of_lreglist 8
   vmlal    \vC0, \vA0, \vB0
   vmlal    \vC0, \vA2, \vB8
   vmlal    \vC0, \vA4, \vB6
   vmlal    \vC0, \vA6, \vB4
   vmlal    \vC0, \vA8, \vB2
   vbic     \vB9, \vC9, vMaskB
-  vand     \vC9, \vC9, vMaskB
+  vand     \vC9, \vC9, vMaskB           // ubignum_of_hreglist 9 + ubignum_of_lreglist 9
   vusra    \vC0, \vB9, #25
   vusra    \vC0, \vB9, #24
   vusra    \vC0, \vB9, #21
   vusra    \vC1, \vC0, #26
-  vand     \vC0, \vC0, vMaskA
+  vand     \vC0, \vC0, vMaskA           // ubignum_of_hreglist 0 + ubignum_of_lreglist 0
   vusra    \vC2, \vC1, #25
-  vand     \vC1, \vC1, vMaskB
-  vusra    \vC3, \vC2, #26
-  vand     \vC2, \vC2, vMaskA
+  vand     \vC1, \vC1, vMaskB           // ubignum_of_hreglist 1 + ubignum_of_lreglist 1
+  vusra    \vC3, \vC2, #26              // ubignum_of_hreglist 3 + ubignum_of_lreglist 3
+  vand     \vC2, \vC2, vMaskA           // ubignum_of_hreglist 2 + ubignum_of_lreglist 2
 .endm
 
-.macro vector_mul vC, vA, vB
+.macro vector_mul vC, vA, vB // @slothy:no-unfold
 vector_mul_inner \
         \vC\()0, \vC\()1, \vC\()2, \vC\()3, \vC\()4, \vC\()5, \vC\()6, \vC\()7, \vC\()8, \vC\()9, \
         \vA\()0, \vA\()1, \vA\()2, \vA\()3, \vA\()4, \vA\()5, \vA\()6, \vA\()7, \vA\()8, \vA\()9, \
         \vB\()0, \vB\()1, \vB\()2, \vB\()3, \vB\()4, \vB\()5, \vB\()6, \vB\()7, \vB\()8, \vB\()9
 .endm
-
-#define STACK_MASK1     0
-#define STACK_MASK2     8
-#define STACK_A_0      16
-#define STACK_A_8      (STACK_A_0+ 8)
-#define STACK_A_16     (STACK_A_0+16)
-#define STACK_A_24     (STACK_A_0+24)
-#define STACK_A_32     (STACK_A_0+32)
-#define STACK_B_0      64
-#define STACK_B_8      (STACK_B_0+ 8)
-#define STACK_B_16     (STACK_B_0+16)
-#define STACK_B_24     (STACK_B_0+24)
-#define STACK_B_32     (STACK_B_0+32)
-#define STACK_CTR      104
-#define STACK_LASTBIT  108
-#define STACK_SCALAR  112
-#define STACK_X_0     168
-#define STACK_X_8     (STACK_X_0+ 8)
-#define STACK_X_16    (STACK_X_0+16)
-#define STACK_X_24    (STACK_X_0+24)
-#define STACK_X_32    (STACK_X_0+32)
-#define STACK_OUT_PTR (STACK_X_0+48)
-
-
 
     // in: x1: scalar pointer, x2: base point pointer
     // out: x0: result pointer
@@ -1424,7 +1471,7 @@ _x25519_scalarmult_alt_orig:
     dup    vconst19.2s, w30
     mov    x0, #(1<<26)-1
     dup    v30.2d, x0
-    ldr    x0, #=0x07fffffe07fffffc
+    ldr    x0, #=0x07fffffe07fffffc     // CHANGEME 1427
     // TODO: I do not quite understand what the two stps are doing
     // First seems to write bytes 0-15 (mask1+mask2); second seems to write bytes 16-31 (mask2+A)
     stack_stp STACK_MASK1, STACK_MASK2, x0, x0
@@ -1440,64 +1487,61 @@ _x25519_scalarmult_alt_orig:
     stack_str STACK_LASTBIT, w1
 mainloop:
     tst    W<x1>, #1
-    vector_sub vB, vX2, vZ2
-    vector_sub vD, vX3, vZ3
-    vector_add vA, vX2, vZ2
-    vector_add vC, vX3, vZ3
-    vector_cmov  vF, vA, vC
+    vector_sub vB, vX2, vZ2             // INTERMEDIATE b
+    vector_sub vD, vX3, vZ3             // INTERMEDIATE d
+    vector_add vA, vX2, vZ2             // INTERMEDIATE a
+    vector_add vC, vX3, vZ3             // INTERMEDIATE c
+    vector_cmov  vF, vA, vC             // INTERMEDIATE f
     vector_to_scalar sF, vF
-    vector_transpose vAB, vA, vB   // (B|A)
-    vector_cmov vG, vB, vD
-    vector_transpose vDC, vD, vC   // (C|D)
+    vector_transpose vAB, vA, vB
+    vector_cmov vG, vB, vD              // INTERMEDIATE g
+    vector_transpose vDC, vD, vC
     vector_stack_str STACK_B, vG
-    scalar_sqr sAA, sF
+    scalar_sqr sAA, sF                  // INTERMEDIATE aa
     scalar_stack_str STACK_A, sAA
     scalar_stack_ldr sG, STACK_B
-    scalar_sqr sBB, sG
+    scalar_sqr sBB, sG                  // INTERMEDIATE bb
     scalar_stack_str STACK_B, sBB
     scalar_stack_ldr sE, STACK_A
     // EE = FF - GG (scalar)
     scalar_sub sE, sE, sBB
-    scalar_clear_carries sBB
-    scalar_decompress sE
+    scalar_clear_carries sBB            // INTERMEDIATE bbalt
+    scalar_decompress sE                // INTERMEDIATE e
     // BB = BB + 121666 *E
-    scalar_addm sBB, sBB, sE, 121666
+    scalar_addm sBB, sBB, sE, 121666    // INTERMEDIATE bce
     // Z4 = BB*E = (BB + 121666 · E)E
-    scalar_mul sZ4, sBB, sE
+    scalar_mul sZ4, sBB, sE             // INTERMEDIATE z4
 
     // unnamed ones are only counter + lastbit logic
-    stack_ldr x2, STACK_CTR
-    lsr    x3, x2, #32
-    subs   W<x0>, W<x2>, #1
-    asr    W<x1>, W<x0>, #5
-    add    x4, sp, #STACK_SCALAR
-    ldr    W<x1>, [x4, W<x1>, SXTW #2]
-    and    W<x4>, W<x0>, #0x1f
-    lsr    W<x1>, W<x1>, W<x4>
-    stack_stp_wform STACK_CTR, STACK_LASTBIT, x0, x1
+    stack_ldr x2, STACK_CTR             // DELETEME
+    lsr    x3, x2, #32                  // DELETEME
+    subs   W<x0>, W<x2>, #1             // DELETEME
+    asr    W<x1>, W<x0>, #5             // DELETEME
+    add    x4, sp, #STACK_SCALAR        // DELETEME
+    ldr    W<x1>, [x4, W<x1>, SXTW #2]  // DELETEME
+    and    W<x4>, W<x0>, #0x1f          // DELETEME
+    lsr    W<x1>, W<x1>, W<x4>          // DELETEME
+    stack_stp_wform STACK_CTR, STACK_LASTBIT, x0, x1 // DELETEME
 
-    // C = A*B -- (CB | DA) = (C|D)*(B|A) (vector)
-    vector_mul vADBC, vAB, vDC
-    // Compute T1 = DA + CB; T2 = DA - CB; Repack T=(T1|T2)
-    vector_addsub_repack vT, vADBC
-    // TA = T^2 = (T1^2 | T2^2)
-    vector_sqr vTA, vT
-    vector_load_lane vTA, STACK_A, 1
-    vector_load_lane vBX, STACK_B, 1
-    vector_load_lane vBX, STACK_X, 0
-    vector_mul vX4Z5, vTA, vBX
+    vector_mul vADBC, vAB, vDC          // INTERMEDIATE H|L = bc|ad
+    vector_addsub_repack vT, vADBC      // INTERMEDIATE H|L = t1|t2
+    vector_sqr vTA, vT                  // INTERMEDIATE H|L = x5|t3
+    vector_load_lane vTA, STACK_A, 1    // CHANGEME 1482
+    vector_load_lane vBX, STACK_B, 1    // CHANGEME 1483
+    vector_load_lane vBX, STACK_X, 0    // CHANGEME 1484
+    vector_mul vX4Z5, vTA, vBX          // INTERMEDIATE H|L = x4|z5
     vector_compress vTA, vTA
-    vector_compress vZ3, vX4Z5
-    eor W<x1>, W<x1>, W<x3>
+    vector_compress vZ3, vX4Z5          // FINAL z3
+    eor W<x1>, W<x1>, W<x3>             // DELETEME
     // Make X4 and Z5 more compact
-    vector_extract_upper vX3, vTA
+    vector_extract_upper vX3, vTA       // FINAL x3
     // Z4 -> Z2
-    scalar_to_vector vZ2, sZ4
+    scalar_to_vector vZ2, sZ4           // FINAL z2
     stack_vldr_dform v28, STACK_MASK2
     stack_vldr_dform v29, STACK_MASK1
 
     // X4 -> X2
-    vector_extract_upper vX2, vZ3
+    vector_extract_upper vX2, vZ3       // FINAL x2
 end_label:
     subs   w11, w0, #-1
     cbnz   w11, mainloop
