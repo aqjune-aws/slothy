@@ -602,7 +602,6 @@ class DataFlowGraph:
             if not self.config.allow_useless_instructions:
                 self.logger.error(f"The output(s) of instruction {t.id}({t.inst}) are not used "
                                   "but also not declared as outputs.")
-                self.logger.error(f"Instruction details: {t}, {t.inst.inputs}")
                 self.logger.error(f"Outputs: {self.outputs}")
                 self._dump_instructions("Source code", error=True)
                 raise SlothyUselessInstructionException("Useless instruction detected -- probably "
