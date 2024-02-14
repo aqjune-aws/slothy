@@ -129,6 +129,10 @@ execution_units = {
     is_qform_form_of(vmov) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
     is_dform_form_of(vmov) : [ExecutionUnit.VEC0, ExecutionUnit.VEC1],
 
+    is_qform_form_of(rev64) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
+    is_qform_form_of(uaddlp) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
+    is_dform_form_of(uaddlp) : [ExecutionUnit.VEC0, ExecutionUnit.VEC1],
+    
     is_qform_form_of(trn1) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
     is_dform_form_of(trn1) : [ExecutionUnit.VEC0, ExecutionUnit.VEC1],
 
@@ -157,12 +161,12 @@ execution_units = {
     is_qform_form_of(vshl) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
     is_dform_form_of(vshl) : [ExecutionUnit.VEC0, ExecutionUnit.VEC1],
 
-    (x_stp_with_imm_sp, w_stp_with_imm_sp, x_str_sp_imm, Str_X) : ExecutionUnit.SCALAR_STORE,
-    (x_ldr_stack_imm, ldr_const, ldr_sxtw_wform, Ldr_X) : ExecutionUnit.SCALAR_LOAD,
-    (umull_wform, mul_wform, umaddl_wform ): ExecutionUnit.SCALAR_MUL(),
+    (x_stp_with_imm_sp, w_stp_with_imm_sp, x_str_sp_imm, Str_X, Stp_X) : ExecutionUnit.SCALAR_STORE,
+    (x_ldr_stack_imm, ldr_const, ldr_sxtw_wform, Ldr_X, Ldp_X) : ExecutionUnit.SCALAR_LOAD,
+    (umull_wform, mul_wform, umaddl_wform, mul_xform, umulh_xform ): ExecutionUnit.SCALAR_MUL(),
     ( lsr, bic, bfi, add, add_imm, add_sp_imm, add2, add_lsr, add_lsl,
       and_imm, nop, Vins, tst_wform, movk_imm, sub, mov,
-      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform) : ExecutionUnit.SCALAR(),
+      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : ExecutionUnit.SCALAR(),
 }
 
 inverse_throughput = {
@@ -173,7 +177,9 @@ inverse_throughput = {
       vsrshr, umov_d ) : 1,
     (trn2, trn1) : 1,
     ( Ldr_Q ) : 2,
+    ( Ldp_X ) : 1,
     ( Str_Q ) : 1,
+    ( Stp_X ) : 1,
     ( tst_wform ) : 1,
     ( nop, Vins, Ldr_X, Str_X ) : 1,
     St4 : 5,
@@ -186,6 +192,8 @@ inverse_throughput = {
     (ldr_sxtw_wform) : 3,
     (lsr, lsr_wform) : 1,
     (umull_wform, mul_wform, umaddl_wform) : 1,
+    (mul_xform) : 3,
+    (umulh_xform) : 4,
     (and_twoarg, and_imm, and_imm_wform, ) : 1,
     (add, add_imm, add2, add_lsr, add_lsl, add_sp_imm) : 1,
     (sub, subs_wform, asr_wform) : 1,
@@ -199,7 +207,10 @@ inverse_throughput = {
     (mov_d01, mov_b00) : 1,
     (vzip1, vzip2) : 1,
     (eor_wform) : 1,
-    (bic) : 1
+    (bic) : 1,
+    (rev64) : 1,
+    (uaddlp) : 1,
+    (adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
 }
 
 default_latencies = {
@@ -216,6 +227,8 @@ default_latencies = {
     ( Ldr_Q, Str_Q ) : 4,
     St4 : 5,
     ( Str_X, Ldr_X ) : 4,
+    ( Ldp_X ) : 4,
+    ( Stp_X ) : 1,
     ( Vins, umov_d ) : 2,
     ( tst_wform) : 1,
     (fcsel_dform) : 2,
@@ -227,6 +240,8 @@ default_latencies = {
     (ldr_sxtw_wform) : 5,
     (lsr, lsr_wform) : 1,
     (umull_wform, mul_wform, umaddl_wform) : 3,
+    (mul_xform) : 4,
+    (umulh_xform) : 5,
     (and_imm, and_imm_wform) : 1,
     (add2, add_lsr, add_lsl, add_sp_imm) : 2,
     (add, add_imm, sub, subs_wform, asr_wform) : 1,
@@ -240,7 +255,10 @@ default_latencies = {
     (mov_d01, mov_b00) : 2,
     (vzip1, vzip2) : 2,
     (eor_wform) : 1,
-    (bic) : 1
+    (bic) : 1,
+    (rev64) : 2,
+    (uaddlp) : 2,
+    (adds_twoarg, adcs, adc, adc_zero_l, adc_zero_r, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
 }
 
 def get_latency(src, out_idx, dst):

@@ -595,6 +595,7 @@ class Instruction:
         for inst_class in Instruction.all_subclass_leaves:
             try:
                 inst = inst_class.make(src)
+                assert inst != None, f"Cannot parse {src}"
                 instnames = [inst_class.__name__]
                 insts = [inst]
                 break
@@ -847,8 +848,10 @@ class AArch64Instruction(Instruction):
         depends_on_flags = getattr(c,"dependsOnFlags", False)
 
         if isinstance(src, str):
-            if src.split(' ')[0] != pattern.split(' ')[0]:
-                raise Instruction.ParsingException("Mnemonic does not match")
+            l = src.split(' ')[0]
+            r = pattern.split(' ')[0]
+            if l != r:
+                raise Instruction.ParsingException(f"Mnemonic does not match: {l} != {r}")
             res = AArch64Instruction.get_parser(pattern)(src)
         else:
             assert isinstance(src, dict)
@@ -2615,6 +2618,7 @@ class x_stp(Stp_X): # pylint: disable=missing-docstring,invalid-name
         obj.increment = None
         obj.pre_index = None
         obj.addr = obj.args_in[0]
+        return obj
 
     def write(self):
         # For now, assert that no fixup has happened
