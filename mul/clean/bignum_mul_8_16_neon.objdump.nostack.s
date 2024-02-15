@@ -485,9 +485,9 @@ adcs x20, x20, x24
 adcs x21, x21, x2
 adcs x22, x22, x2
 adc x23, x23, x2
-stp x3, x4, [x0, #32]
-stp x5, x6, [x0, #48]
-stp x7, x8, [x0, #64]
-stp x9, x10, [x0, #80]
-stp x20, x21, [x0, #96]
-stp x22, x23, [x0, #112]
+stp x3, x4, [x0, #32] // @slothy:writes=buffer32
+stp x5, x6, [x0, #48] // @slothy:writes=buffer48
+stp x7, x8, [x0, #64] // @slothy:writes=buffer64
+stp x9, x10, [x0, #80] // @slothy:writes=buffer80
+stp x20, x21, [x0, #96] // @slothy:writes=buffer96
+stp x22, x23, [x0, #112] // @slothy:writes=buffer112

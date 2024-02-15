@@ -14,9 +14,10 @@ REDIRECT_OUTPUT="--log --logdir=${LOG_DIR}"
 ${SLOTHY_DIR}/slothy-cli Arm_AArch64 Arm_Cortex_A55 \
     ${CLEAN_DIR}/bignum_mul_8_16_neon.objdump.nostack.s \
     -o ${OPT_DIR}/test_nosymvars.s \
-    -c reserved_regs="[x18]" -c outputs="[x0]" \
+    -c reserved_regs="[x18]" -c outputs=[hint_buffer32,hint_buffer48,hint_buffer64,hint_buffer80,hint_buffer96,hint_buffer112] \
     -c /visualize_reordering \
     $REDIRECT_OUTPUT
+#    -c reserved_regs="[x18]" -c outputs="[x0]" \
 #    -c outputs="[x10,x11]"
 #    -c constraints.allow_reordering=False                                    \
 #    -c constraints.functional_only=True                                      \
