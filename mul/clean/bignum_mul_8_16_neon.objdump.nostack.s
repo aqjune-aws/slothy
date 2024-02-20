@@ -191,7 +191,7 @@ adc x19, xzr, x19
 ldp x22, x21, [x0, #32] // @slothy:reads=output2
 adds x11, x11, x22
 adcs x12, x12, x21
-ldp x22, x21, [x0, #48] // @slothy:reads=output0
+ldp x22, x21, [x0, #48] // @slothy:reads=output3
 adcs x13, x13, x22
 adcs x14, x14, x21
 adcs x15, x15, xzr

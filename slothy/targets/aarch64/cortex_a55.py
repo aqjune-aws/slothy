@@ -126,8 +126,17 @@ execution_units = {
       q_ldr1_stack, Q_Ld2_Lane_Post_Inc,
     ): [ExecutionUnit.VEC0, ExecutionUnit.VEC1],  # these instructions use VEC0 or VEC1
 
+    is_qform_form_of(vext) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
+    is_qform_form_of(vshrn) : [[ExecutionUnit.VEC1]],
+    is_qform_form_of(vshli) : [[ExecutionUnit.VEC1]],
+    is_qform_form_of(vxtn) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
+
     is_qform_form_of(vmov) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
     is_dform_form_of(vmov) : [ExecutionUnit.VEC0, ExecutionUnit.VEC1],
+    
+    is_qform_form_of(vmovi) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
+
+    is_qform_form_of(vdup) : ExecutionUnit.SCALAR_MUL(),
 
     is_qform_form_of(rev64) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
     is_qform_form_of(uaddlp) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
@@ -166,7 +175,7 @@ execution_units = {
     (umull_wform, mul_wform, umaddl_wform, mul_xform, umulh_xform ): ExecutionUnit.SCALAR_MUL(),
     ( lsr, bic, bfi, add, add_imm, add_sp_imm, add2, add_lsr, add_lsl,
       and_imm, nop, Vins, tst_wform, movk_imm, sub, mov,
-      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : ExecutionUnit.SCALAR(),
+      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : ExecutionUnit.SCALAR(),
 }
 
 inverse_throughput = {
@@ -210,11 +219,23 @@ inverse_throughput = {
     (bic) : 1,
     (rev64) : 1,
     (uaddlp) : 1,
-    (adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
+    (vmovi) : 1,
+    (vext) : 1,
+    (vshrn) : 1,
+    (vxtn) : 1,
+    (vshli) : 1,
+    (vdup) : 1,
+    (adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
 }
 
 default_latencies = {
-    vmov: 2,
+    vdup : 3,
+    vmov : 2,
+    vmovi : 2,
+    vext : 2,
+    vshrn : 2,
+    vxtn : 2,
+    vshli : 2,
 
     is_qform_form_of([vadd, vsub]) : 3,
     is_dform_form_of([vadd, vsub]) : 2,
@@ -258,7 +279,7 @@ default_latencies = {
     (bic) : 1,
     (rev64) : 2,
     (uaddlp) : 2,
-    (adds_twoarg, adcs, adc, adc_zero_l, adc_zero_r, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
+    (adds_twoarg, adcs, adc, adc_zero_l, adc_zero_r, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
 }
 
 def get_latency(src, out_idx, dst):
