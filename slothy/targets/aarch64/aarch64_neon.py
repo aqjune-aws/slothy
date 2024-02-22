@@ -1666,6 +1666,12 @@ class neg(AArch64BasicArithmetic): # pylint: disable=missing-docstring,invalid-n
     inputs = ["Xa"]
     outputs = ["Xd"]
 
+class ngc_zero(AArch64BasicArithmetic): # pylint: disable=missing-docstring,invalid-name
+    pattern = "ngc <Xd>, xzr"
+    inputs = []
+    outputs = ["Xd"]
+    dependsOnFlags=True
+
 class adds(AArch64BasicArithmetic): # pylint: disable=missing-docstring,invalid-name
     pattern = "adds <Xd>, <Xa>, <imm>"
     inputs = ["Xa"]

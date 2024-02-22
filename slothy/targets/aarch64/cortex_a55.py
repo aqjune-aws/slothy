@@ -178,8 +178,8 @@ execution_units = {
     (x_ldr_stack_imm, ldr_const, ldr_sxtw_wform, Ldr_X, Ldp_X) : ExecutionUnit.SCALAR_LOAD,
     (umull_wform, mul_wform, umaddl_wform, mul_xform, umulh_xform ): ExecutionUnit.SCALAR_MUL(),
     ( lsr, lsl, bic, bfi, add, add_imm, add_sp_imm, add2, add_lsr, add_lsl,
-      and_imm, nop, Vins, tst_wform, movk_imm, sub, mov, mov_imm,
-      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform, adds, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor) : ExecutionUnit.SCALAR(),
+      and_imm, and_twoarg, nop, Vins, tst_wform, movk_imm, sub, sub_imm, mov, mov_imm,
+      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform, adds, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor, ngc_zero, neg ) : ExecutionUnit.SCALAR(),
     ( adds_lsl ) : ExecutionUnit.SCALAR(), # For Neoverse N1, adds lsl with imm > 4 is M with 2 cycles latency..
     ( extr ) : ExecutionUnit.SCALAR_MUL(), # For Neoverse N1, it uses both I and M.
 }
@@ -213,7 +213,7 @@ inverse_throughput = {
     (umulh_xform) : 4,
     (and_twoarg, and_imm, and_imm_wform, ) : 1,
     (add, add_imm, add2, add_lsr, add_lsl, add_sp_imm) : 1,
-    (sub, subs_wform, asr_wform) : 1,
+    (sub, sub_imm, subs_wform, asr_wform) : 1,
     (bfi) : 1,
     (vshl, vshl, vushr) : 1,
     (vusra) : 1,
@@ -233,7 +233,7 @@ inverse_throughput = {
     (vxtn) : 1,
     (vshli) : 1,
     (vdup) : 1,
-    (adds, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor) : 1,
+    (adds, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor, ngc_zero, neg ) : 1,
     (adds_lsl) : 1,
     (extr) : 1,
 }
@@ -275,9 +275,9 @@ default_latencies = {
     (umull_wform, mul_wform, umaddl_wform) : 3,
     (mul_xform) : 4,
     (umulh_xform) : 5,
-    (and_imm, and_imm_wform) : 1,
+    (and_imm, and_twoarg, and_imm_wform) : 1,
     (add2, add_lsr, add_lsl, add_sp_imm) : 2,
-    (add, add_imm, sub, subs_wform, asr_wform) : 1,
+    (add, add_imm, sub, sub_imm, subs_wform, asr_wform) : 1,
     (bfi) : 2,
     (vshl, vushr) : 2,
     (vusra) : 3,
@@ -291,7 +291,7 @@ default_latencies = {
     (bic) : 1,
     (rev64) : 2,
     (uaddlp) : 2,
-    (adds, adds_twoarg, adcs, adc, adc_zero_l, adc_zero_r, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor) : 1,
+    (adds, adds_twoarg, adcs, adc, adc_zero_l, adc_zero_r, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor, ngc_zero, neg) : 1,
     (adds_lsl) : 1, # Neoverse N1: must be 2 if imm > 4
     (extr) : 3,
 }
