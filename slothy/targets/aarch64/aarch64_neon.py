@@ -2351,6 +2351,11 @@ class vmull(AArch64Instruction): # pylint: disable=missing-docstring,invalid-nam
     inputs = ["Va", "Vb"]
     outputs = ["Vd"]
 
+class vmull2(AArch64Instruction): # pylint: disable=missing-docstring,invalid-name
+    pattern = "umull2 <Vd>.<dt0>, <Va>.<dt1>, <Vb>.<dt2>"
+    inputs = ["Va", "Vb"]
+    outputs = ["Vd"]
+
 class vmlal(AArch64Instruction): # pylint: disable=missing-docstring,invalid-name
     pattern = "umlal <Vd>.<dt0>, <Va>.<dt1>, <Vb>.<dt2>"
     inputs = ["Va", "Vb"]

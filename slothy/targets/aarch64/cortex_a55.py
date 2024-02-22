@@ -112,7 +112,7 @@ execution_units = {
         Ldr_Q,
         Str_Q,
         q_ldr1_stack, Q_Ld2_Lane_Post_Inc,
-        vmull, vmlal, vushr, vusra
+        vushr, vusra
     ): [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],  # these instructions use both VEC0 and VEC1
 
     St4 : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1, ExecutionUnit.SCALAR_LOAD,
@@ -130,6 +130,10 @@ execution_units = {
     is_qform_form_of(vshrn) : [[ExecutionUnit.VEC1]],
     is_qform_form_of(vshli) : [[ExecutionUnit.VEC1]],
     is_qform_form_of(vxtn) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
+
+    is_qform_form_of(vmlal): [[ExecutionUnit.VEC0]],
+    is_qform_form_of(vmull): [[ExecutionUnit.VEC0]],
+    is_qform_form_of(vmull2): [[ExecutionUnit.VEC0]],
 
     is_qform_form_of(vmov) : [[ExecutionUnit.VEC0, ExecutionUnit.VEC1]],
     is_dform_form_of(vmov) : [ExecutionUnit.VEC0, ExecutionUnit.VEC1],
@@ -173,16 +177,18 @@ execution_units = {
     (x_stp_with_imm_sp, w_stp_with_imm_sp, x_str_sp_imm, Str_X, Stp_X) : ExecutionUnit.SCALAR_STORE,
     (x_ldr_stack_imm, ldr_const, ldr_sxtw_wform, Ldr_X, Ldp_X) : ExecutionUnit.SCALAR_LOAD,
     (umull_wform, mul_wform, umaddl_wform, mul_xform, umulh_xform ): ExecutionUnit.SCALAR_MUL(),
-    ( lsr, bic, bfi, add, add_imm, add_sp_imm, add2, add_lsr, add_lsl,
-      and_imm, nop, Vins, tst_wform, movk_imm, sub, mov,
-      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : ExecutionUnit.SCALAR(),
+    ( lsr, lsl, bic, bfi, add, add_imm, add_sp_imm, add2, add_lsr, add_lsl,
+      and_imm, nop, Vins, tst_wform, movk_imm, sub, mov, mov_imm,
+      subs_wform, asr_wform, and_imm_wform, lsr_wform, eor_wform, adds, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor) : ExecutionUnit.SCALAR(),
+    ( adds_lsl ) : ExecutionUnit.SCALAR(), # For Neoverse N1, adds lsl with imm > 4 is M with 2 cycles latency..
+    ( extr ) : ExecutionUnit.SCALAR_MUL(), # For Neoverse N1, it uses both I and M.
 }
 
 inverse_throughput = {
     ( vadd, vsub, vmov,
       vmul, vmul_lane, vmls, vmls_lane,
       vqrdmulh, vqrdmulh_lane, vqdmulh_lane, vmull,
-      vmlal,
+      vmlal, vmull2,
       vsrshr, umov_d ) : 1,
     (trn2, trn1) : 1,
     ( Ldr_Q ) : 2,
@@ -195,11 +201,13 @@ inverse_throughput = {
     (fcsel_dform) : 1,
     (VecToGprMov, Mov_xtov_d) : 1,
     (movk_imm, mov) : 1,
+    (mov_imm) : 1,
     (d_stp_stack_with_inc, d_str_stack_with_inc) : 1,
     (x_stp_with_imm_sp, w_stp_with_imm_sp, x_str_sp_imm) : 1,
     (x_ldr_stack_imm, ldr_const) : 1,
     (ldr_sxtw_wform) : 3,
     (lsr, lsr_wform) : 1,
+    (lsl) : 1,
     (umull_wform, mul_wform, umaddl_wform) : 1,
     (mul_xform) : 3,
     (umulh_xform) : 4,
@@ -225,7 +233,9 @@ inverse_throughput = {
     (vxtn) : 1,
     (vshli) : 1,
     (vdup) : 1,
-    (adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
+    (adds, adds_twoarg, adcs, adc, adc_zero_r, adc_zero_l, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor) : 1,
+    (adds_lsl) : 1,
+    (extr) : 1,
 }
 
 default_latencies = {
@@ -244,7 +254,7 @@ default_latencies = {
     ( vsrshr ) : 3,
     ( vmul, vmul_lane, vmls, vmls_lane,
       vqrdmulh, vqrdmulh_lane, vqdmulh_lane, vmull,
-      vmlal) : 4,
+      vmlal, vmull2) : 4,
     ( Ldr_Q, Str_Q ) : 4,
     St4 : 5,
     ( Str_X, Ldr_X ) : 4,
@@ -255,11 +265,13 @@ default_latencies = {
     (fcsel_dform) : 2,
     (VecToGprMov, Mov_xtov_d) : 2,
     (movk_imm, mov) : 1,
+    (mov_imm) : 1,
     (d_stp_stack_with_inc, d_str_stack_with_inc) : 1,
     (x_stp_with_imm_sp, w_stp_with_imm_sp, x_str_sp_imm) : 1,
     (x_ldr_stack_imm, ldr_const) : 3,
     (ldr_sxtw_wform) : 5,
     (lsr, lsr_wform) : 1,
+    (lsl) : 1,
     (umull_wform, mul_wform, umaddl_wform) : 3,
     (mul_xform) : 4,
     (umulh_xform) : 5,
@@ -279,7 +291,9 @@ default_latencies = {
     (bic) : 1,
     (rev64) : 2,
     (uaddlp) : 2,
-    (adds_twoarg, adcs, adc, adc_zero_l, adc_zero_r, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbc, cneg, csetm, cinv, cmn_imm, eor) : 1,
+    (adds, adds_twoarg, adcs, adc, adc_zero_l, adc_zero_r, adc_zero2, adcs_zero_l, adcs_zero_r, subs_twoarg, sbcs, sbcs_zero, sbc, cneg, csel_ne, csetm, cinv, cmn_imm, eor) : 1,
+    (adds_lsl) : 1, # Neoverse N1: must be 2 if imm > 4
+    (extr) : 3,
 }
 
 def get_latency(src, out_idx, dst):
